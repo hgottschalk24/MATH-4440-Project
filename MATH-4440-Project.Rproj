@@ -1,13 +1,47 @@
-Version: 1.0
+---
+title: "MATH 4440 Final Project"
+author: "Hailey and Lavender"
+date: "2026-03-10"
+output: html_document
+---
 
-RestoreWorkspace: Default
-SaveWorkspace: Default
-AlwaysSaveHistory: Default
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
 
-EnableCodeIndexing: Yes
-UseSpacesForTab: Yes
-NumSpacesForTab: 2
-Encoding: UTF-8
+```{r}
+library(ggplot2)
+library(caret)
+library(MASS)
+library(pscl)
+library(rpart)
+library(pROC)
+```
+```{r}
+library(readr)
+bank <- read_csv("bank-1.csv")
+bank
+```
 
-RnwWeave: Sweave
-LaTeX: pdfLaTeX
+Data Preprocessing
+```{r}
+bank$pdays_recode <- ifelse(bank$pdays == -1,0,bank$pdays)
+
+bank$job <- as.factor(bank$job)
+bank$educatin <- as.factor(bank$education)
+
+boxplot(bank$balance, main = "Balance")
+boxplot(bank$duration, main = "Call Duration")
+```
+
+Summary Statistics
+```{r}
+summary(bank[, sapply(bank, is.numeric)])
+
+table(bank$job)
+prop.table(table(bank$eduction))
+
+unique(bank$pdays)
+summary(bank$duration)
+```
+
