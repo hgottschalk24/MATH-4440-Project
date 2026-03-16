@@ -1,0 +1,149 @@
+title: "MATH 4440 Final Project"
+author: "Hailey and Lavender"
+date: "2026-03-10"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(ggplot2)
+library(caret)
+library(MASS)
+library(pscl)
+library(rpart)
+library(pROC)
+library(readr)
+```
+
+Load Dataset
+```{r}
+bank <- read.csv("bank-1.csv")
+bank
+
+```
+
+Data Preprocessing
+1. Handle missing values and special cases
+```{r}
+bank$pdays_recode <- ifelse(bank$pdays == -1, 0, bank$pdays)
+```
+The variable pdays represents the number of days since the client was last contacted. A value of -1 indicates the client was never contacted before. To make the variable easier to interpret, we recoded -1 as 0 using a new variable pdays_recode.
+
+2. Convert categorical variables to factors 
+```{r}
+bank$job <- as.factor(bank$job)
+bank$education <- as.factor(bank$education)
+bank$marital <- as.factor(bank$marital)
+bank$default <- as.factor(bank$default)
+bank$housing <- as.factor(bank$housing)
+bank$loan <- as.factor(bank$loan)
+bank$contact <- as.factor(bank$contact)
+bank$month <- as.factor(bank$month)
+bank$poutcome <- as.factor(bank$poutcome)
+bank$y <- as.factor(bank$y)
+```
+Several variables such as job, marital status, education, and loan status are categorical. These variables were converted to factors so that statistical models and visualizations treat them appropriately.
+
+3. Flag and explain outliers 
+```{r}
+boxplot(bank$balance, main = "Balance")
+boxplot(bank$duration, main = "Call Duration")
+```
+Boxplots were used to identify potential outliers in the balance and duration variables. Some extreme values were observed, particularly in call duration. These values were not removed because they may represent legitimate client interactions.
+
+4. Summary Statistics
+a. Numeric 
+```{r}
+summary(bank[, sapply(bank, is.numeric)])
+```
+Summary statistics were calculated for numeric variables including age, balance, duration, campaign, pdays, and previous contacts. These statistics help understand the distribution, range, and central tendencies of the data.
+
+b. categorical
+```{r}
+table(bank$job)
+prop.table(table(bank$education))
+table(bank$y)
+```
+Frequency tables were used to examine categorical variables such as job and education. Proportions were also calculated to better understand the distribution of education levels among clients.
+
+5. Identify any suspicious values
+```{r}
+unique(bank$pdays)
+summary(bank$duration)
+```
+The unique() function was used to inspect unusual values in pdays. The summary() function was used to check whether call durations had extremely large or small values that could indicate potential anomalies.
+
+**Visualizations**
+1. Histograms
+```{r}
+hist(bank$age,
+     col="lightblue",
+     main="Age Distribution",
+     xlab="Age")
+```
+A histogram was created to visualize the distribution of client ages. The plot shows that most clients fall within the middle age range.
+
+2. Boxplot
+```{r}
+boxplot(duration ~ y, data=bank,
+        col=c("orange","skyblue"),
+        main="Call Duration by Subscription")
+```
+This boxplot compares call duration between clients who subscribed and those who did not. Clients who subscribed tend to have longer call durations.
+
+3. Bar Chart
+```{r}
+barplot(table(bank$job),
+        las=2,
+        col="lightgreen",
+        main="Job Distribution")
+```
+The bar chart shows the distribution of clients across different job categories. Some professions such as management, technician, and blue-collar workers appear more frequently in the dataset.
+
+4. Correlation Heatmap
+```{r}
+numeric_vars <- bank[, c("age","balance","duration","campaign",
+                       "pdays_recode","previous")]
+
+cor_matrix <- cor(numeric_vars)
+
+heatmap(cor_matrix)
+```
+A correlation heatmap was created to examine relationships between numeric variables. This helps detect potential multicollinearity issues before building predictive models.
+
+**Relationship Exploration**
+1. Scatterplot
+```{r}
+plot(bank$duration, bank$campaign,
+     xlab="Call Duration",
+     ylab="Campaign Contacts",
+     main="Duration vs Campaign Contacts")
+```
+2. Grouped Bar Chart
+```{r}
+ table_edu_y <- table(bank$education, bank$y)
+
+barplot(table_edu_y,
+        beside=TRUE,
+        col=c("orange","skyblue"),
+        legend=TRUE,
+        main="Education vs Subscription")
+```
+The grouped bar chart compares education levels with term deposit subscription outcomes. It helps visualize whether clients with certain education levels are more likely to subscribe.
+
+3.Scatterplot to explore numeric trends
+```{r}
+plot(bank$duration, bank$campaign)
+```
+The scatterplot explores the relationship between call duration and the number of campaign contacts. This visualization helps determine whether longer calls tend to occur when clients are contacted multiple times.
+
+4. correlation heatmap for multicollinearity
+```{r}
+cor(bank[, c("duration", "campaign", "pdays_recode")])
+```
+Correlation analysis was conducted among key campaign-related variables including call duration, number of contacts during the campaign, and days since the last contact. This helps detect potential multicollinearity issues before building predictive models.
+
+5.One noticeable relationship is between call duration and subscription outcome. Clients who subscribed to the term deposit generally had longer call durations, suggesting that longer conversations may increase the likelihood of a successful subscription. Additionally, previous campaign outcomes appear to influence success rates, indicating that clients with positive prior interactions may be more receptive to future marketing efforts.
