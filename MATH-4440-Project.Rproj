@@ -1,4 +1,3 @@
-
 title: "MATH 4440 Final Project"
 author: "Hailey and Lavender"
 date: "2026-03-10"
@@ -17,29 +16,431 @@ library(pscl)
 library(rpart)
 library(pROC)
 library(readr)
-bank <- read_csv("bank-1.csv")
-bank
+```
+
+Load Dataset
+```{r}
+bank <- read.csv("bank-1.csv")
+head(bank)
+
 ```
 
 Data Preprocessing
+1. Handle missing values and special cases
 ```{r}
-bank$pdays_recode <- ifelse(bank$pdays == -1,0,bank$pdays)
+bank$pdays_recode <- ifelse(bank$pdays == -1, 0, bank$pdays)
+```
+The variable pdays represents the number of days since the client was last contacted. A value of -1 indicates the client was never contacted before. To make the variable easier to interpret, we recoded -1 as 0 using a new variable pdays_recode.
 
+2. Convert categorical variables to factors 
+```{r}
 bank$job <- as.factor(bank$job)
 bank$education <- as.factor(bank$education)
+bank$marital <- as.factor(bank$marital)
+bank$default <- as.factor(bank$default)
+bank$housing <- as.factor(bank$housing)
+bank$loan <- as.factor(bank$loan)
+bank$contact <- as.factor(bank$contact)
+bank$month <- as.factor(bank$month)
+bank$poutcome <- as.factor(bank$poutcome)
+bank$y <- as.factor(bank$y)
+```
+Several variables such as job, marital status, education, and loan status are categorical. These variables were converted to factors so that statistical models and visualizations treat them appropriately.
 
+3. Flag and explain outliers 
+```{r}
 boxplot(bank$balance, main = "Balance")
 boxplot(bank$duration, main = "Call Duration")
 ```
+Boxplots were used to identify potential outliers in the balance and duration variables. Some extreme values were observed, particularly in call duration. These values were not removed because they may represent legitimate client interactions.
 
-Summary Statistics
+4. Summary Statistics
+a. Numeric 
 ```{r}
 summary(bank[, sapply(bank, is.numeric)])
+```
+Summary statistics were calculated for numeric variables including age, balance, duration, campaign, pdays, and previous contacts. These statistics help understand the distribution, range, and central tendencies of the data.
 
+b. categorical
+```{r}
 table(bank$job)
 prop.table(table(bank$education))
+table(bank$y)
+```
+Frequency tables were used to examine categorical variables such as job and education. Proportions were also calculated to better understand the distribution of education levels among clients.
 
+5. Identify any suspicious values
+```{r}
 unique(bank$pdays)
 summary(bank$duration)
+```
+The unique() function was used to inspect unusual values in pdays. The summary() function was used to check whether call durations had extremely large or small values that could indicate potential anomalies.
+
+**Visualizations**
+1. Histograms
+```{r}
+hist(bank$age,
+     col="lightblue",
+     main="Age Distribution",
+     xlab="Age")
+```
+A histogram was created to visualize the distribution of client ages. The plot shows that most clients fall within the middle age range.
+
+2. Boxplot
+```{r}
+boxplot(duration ~ y, data=bank,
+        col=c("orange","skyblue"),
+        main="Call Duration by Subscription")
+```
+This boxplot compares call duration between clients who subscribed and those who did not. Clients who subscribed tend to have longer call durations.
+
+3. Bar Chart
+```{r}
+barplot(table(bank$job),
+        las=2,
+        col="lightgreen",
+        main="Job Distribution")
+```
+The bar chart shows the distribution of clients across different job categories. Some professions such as management, technician, and blue-collar workers appear more frequently in the dataset.
+
+4. Correlation Heatmap
+```{r}
+numeric_vars <- bank[, c("age","balance","duration","campaign",
+                       "pdays_recode","previous")]
+
+cor_matrix <- cor(numeric_vars)
+
+heatmap(cor_matrix)
+```
+A correlation heatmap was created to examine relationships between numeric variables. This helps detect potential multicollinearity issues before building predictive models.
+
+**Relationship Exploration**
+1. Scatterplot
+```{r}
+plot(bank$duration, bank$campaign,
+     xlab="Call Duration",
+     ylab="Campaign Contacts",
+     main="Duration vs Campaign Contacts")
+```
+2. Grouped Bar Chart
+```{r}
+ table_edu_y <- table(bank$education, bank$y)
+
+barplot(table_edu_y,
+        beside=TRUE,
+        col=c("orange","skyblue"),
+        legend=TRUE,
+        main="Education vs Subscription")
+```
+The grouped bar chart compares education levels with term deposit subscription outcomes. It helps visualize whether clients with certain education levels are more likely to subscribe.
+
+3.Scatterplot to explore numeric trends
+```{r}
+plot(bank$duration, bank$campaign)
+```
+The scatterplot explores the relationship between call duration and the number of campaign contacts. This visualization helps determine whether longer calls tend to occur when clients are contacted multiple times.
+
+4. correlation heatmap for multicollinearity
+```{r}
+cor(bank[, c("duration", "campaign", "pdays_recode")])
+```
+Correlation analysis was conducted among key campaign-related variables including call duration, number of contacts during the campaign, and days since the last contact. This helps detect potential multicollinearity issues before building predictive models.
+
+5.One noticeable relationship is between call duration and subscription outcome. Clients who subscribed to the term deposit generally had longer call durations, suggesting that longer conversations may increase the likelihood of a successful subscription. Additionally, previous campaign outcomes appear to influence success rates, indicating that clients with positive prior interactions may be more receptive to future marketing efforts.
+
+**Multiple Linear Regression**
+
+1. Splitting the Data
+```{r}
+set.seed(123)
+train_idx <- sample(1:nrow(bank), size = 0.7 * nrow(bank))
+train <- bank[train_idx, ]
+test <- bank[-train_idx, ]
+```
+This splits the data into a 70% training set and a 30% test set.
+
+**Model 1: Campaign (number of contacts)**
+
+Split for Campaign variable, removing y
+```{r}
+train_campaign <- train[, !names(train) %in% c("y")]
+test_campaign <- test[, !names(test) %in% c("y")]
+```
+
+Fit full model
+```{r}
+model_campaign_full <- lm(campaign ~., data = train_campaign)
+```
+
+Stepwise Selection
+```{r}
+model_campaign_step <- step(model_campaign_full, direction = "both", trace = 0)
+summary(model_campaign_step)
+```
+10-fold CV comparison
+```{r}
+set.seed(100)
+cv_control <- trainControl(method = "cv", number = 10)
+model_campaign_full_cv <- train(campaign ~ ., data = train_campaign, method = "lm", trControl = cv_control)
+```
+
+Getting the formula from stepwise model
+```{r}
+step_formula_campaign <- formula(model_campaign_step)
+model_campaign_step_cv <- train(step_formula_campaign, data = train_campaign, method = "lm", trControl = cv_control)
+```
+
+Compare CV RMSE
+```{r}
+print("Campaign Model - 10-Fold CV RMSE Comparison:")
+print(paste("Full Model RMSE:", model_campaign_full_cv$results$RMSE))
+print(paste("Stepwise Model RMSE:", model_campaign_step_cv$results$RMSE))
+```
+The 10-fold Stepwise Model has the lower RMSE.
+
+Residual Plot
+```{r}
+plot(model_campaign_step$fitted.values, resid(model_campaign_step), 
+     xlab = "Fitted Values",
+     ylab = "Residuals",
+     main = "Residual Plot: Campaign Model")
+abline(h = 0, col = "red", lty = 2)
+```
+
+Test set RMSE
+```{r}
+pred_campaign <- predict(model_campaign_step, newdata = test_campaign)
+rmse_campaign <- sqrt(mean((pred_campaign - test_campaign$campaign)^2))
+print(paste("Test Set RMSE for Campaign:", rmse_campaign))
+```
+
+Model Coefficients 
+```{r}
+summary(model_campaign_step)
+```
+
+Model 1: Campaign - Model Equation:
+
+campaign = 0.076 + 0.556(housing_yes) + 0.085(day) - 0.0006(duration) + 2.550(month_aug) + 0.712(month_dec) + 1.487(month_feb) - 0.704(month_jan) + 2.132(month_jul) + 2.026(month_jun) + 1.638(month_mar) + 0.775(month_may) + 0.164(month_nov) - 0.079(month_oct) + 0.282(month_sep)
+
+Interpretation of Key Coefficients:
+
+- **day** (β = 0.085, p < 0.001): For each additional day later in the month, the number of campaign contacts increases by approximately 0.085, holding other variables constant. Clients contacted later in the month tend to require slightly more follow-up attempts.
+
+- **housing** (β = 0.556, p < 0.001): Clients with a housing loan require approximately 0.56 more contacts during the campaign compared to clients without a housing loan, indicating that clients with existing financial commitments may be harder to reach or convert.
+
+- **duration** (β = -0.0006, p = 0.006): For each additional second of call duration, the number of contacts decreases by approximately 0.0006. Longer calls are associated with fewer total contacts needed, suggesting that productive conversations reduce the need for follow-ups.
+
+- **month effects**: Summer months (August, July, June) require significantly more contacts (approximately 2–2.5 additional contacts) compared to April, while January requires fewer contacts.
+
+Marketing Insight:
+
+The summer months (June, July, August) require substantially more contact attempts per client. The marketing team should allocate additional resources during these months or consider shifting campaign timing to months like January or October when fewer contacts are needed, potentially reducing costs while maintaining outreach effectiveness.
+
+
+**Model 2: pdays**
+
+Split for pdays variable, removing y and original pdays
+```{r}
+train_pdays <- train[, !names(train) %in% c("y", "pdays")]
+test_pdays <- test[, !names(test) %in% c("y", "pdays")]
+```
+
+Fit full model
+```{r}
+model_pdays_full <- lm(pdays_recode ~., data = train_pdays)
+```
+
+Stepwise Selection
+```{r}
+model_pdays_step <- step(model_pdays_full, direction = "both", trace = 0)
+summary(model_pdays_step)
+```
+
+10-fold CV comparison
+```{r}
+set.seed(100)
+model_pdays_full_cv <- train(pdays_recode ~ ., data = train_pdays, method = "lm", trControl = cv_control)
+```
+
+Getting the formula from stepwise model
+```{r}
+step_formula_pdays <- formula(model_pdays_step)
+model_pdays_step_cv <- train(step_formula_pdays, data = train_pdays, method = "lm", trControl = cv_control)
+```
+
+Compare CV RMSE
+```{r}
+print("Pdays Model - 10-Fold CV RMSE Comparison:")
+print(paste("Full Model RMSE:", model_pdays_full_cv$results$RMSE))
+print(paste("Stepwise Model RMSE:", model_pdays_step_cv$results$RMSE))
+```
+The 10-fold Stepwise Model has the lower RMSE.
+
+Residual Plot
+```{r}
+plot(model_pdays_step$fitted.values, resid(model_pdays_step), 
+     xlab = "Fitted Values",
+     ylab = "Residuals",
+     main = "Residual Plot: Pdays Model")
+abline(h = 0, col = "red", lty = 2)
+```
+
+Test set RMSE
+```{r}
+pred_pdays <- predict(model_pdays_step, newdata = test_pdays)
+rmse_pdays <- sqrt(mean((pred_pdays - test_pdays$pdays_recode)^2))
+print(paste("Test Set RMSE for Pdays:", rmse_pdays))
+```
+
+Model Coefficients 
+```{r}
+summary(model_pdays_step)
+```
+Model 2: pdays_recode - Model Equation:
+
+pdays_recode = 267.43 - 0.20(age) - 4.26(marital_married) - 6.62(marital_single) - 4.44(education_secondary) - 7.42(education_tertiary) - 0.21(education_unknown) + 6.53(housing_yes) - 0.44(contact_telephone) - 16.28(contact_unknown) - 0.32(day) + [month effects] - 1.59(previous) - 26.55(poutcome_other) - 72.44(poutcome_success) - 246.46(poutcome_unknown)
+
+Interpretation of Key Coefficients:
+
+- **poutcome_unknown** (β = −246.46, p < 0.001): Clients with no prior campaign contact have approximately 246 fewer days since last contact compared to clients with a failed prior outcome. This reflects that "unknown" essentially means never contacted, so pdays is coded as 0.
+
+- **poutcome_success** (β = −72.44, p < 0.001): Clients with a successful prior outcome were re-contacted approximately 72 days sooner than those with a failed outcome, indicating the bank prioritizes following up with previously successful clients more quickly.
+
+- **previous** (β = −1.59, p = 0.021): For each additional prior contact, pdays decreases by approximately 1.6 days. Clients contacted more frequently in the past tend to have shorter gaps between contacts.
+
+- **housing** (β = 6.53, p = 0.001): Clients with housing loans have approximately 6.5 more days since their last contact, suggesting these clients may be deprioritized in follow-up timing.
+
+Marketing Insight:
+
+The bank's current practice shows that clients with prior successful outcomes are re-contacted significantly sooner (72 days earlier) than those with failed outcomes. The marketing team should continue prioritizing quick follow-ups with previously successful clients while potentially extending wait times for clients with failed prior outcomes to avoid campaign fatigue.
+
+
+**Model 3: duration (Call duration in seconds)**
+
+Split for duration variable, removing y from predictors
+```{r}
+train_duration <- train[, !names(train) %in% c("y")]
+test_duration <- test[, !names(test) %in% c("y")]
+```
+
+Fit full model
+```{r}
+model_duration_full <- lm(duration ~., data = train_duration)
+```
+
+Stepwise Selection
+```{r}
+model_duration_step <- step(model_duration_full, direction = "both", trace = 0)
+summary(model_duration_step)
+```
+
+10-fold CV comparison
+```{r}
+set.seed(100)
+model_duration_full_cv <- train(duration ~ ., data = train_duration, method = "lm", trControl = cv_control)
+```
+
+Getting the formula from stepwise model
+```{r}
+step_formula_duration <- formula(model_duration_step)
+model_duration_step_cv <- train(step_formula_duration, data = train_duration, method = "lm", trControl = cv_control)
+```
+
+Compare CV RMSE
+```{r}
+print("Duration Model - 10-Fold CV RMSE Comparison:")
+print(paste("Full Model RMSE:", model_duration_full_cv$results$RMSE))
+print(paste("Stepwise Model RMSE:", model_duration_step_cv$results$RMSE))
+```
+The 10-fold Stepwise Model has the lower RMSE.
+
+Residual Plot
+```{r}
+plot(model_duration_step$fitted.values, resid(model_duration_step), 
+     xlab = "Fitted Values",
+     ylab = "Residuals",
+     main = "Residual Plot: Duration Model")
+abline(h = 0, col = "red", lty = 2)
+```
+
+Test set RMSE
+```{r}
+pred_duration <- predict(model_duration_step, newdata = test_duration)
+rmse_duration <- sqrt(mean((pred_duration - test_duration$duration)^2))
+print(paste("Test Set RMSE for Duration:", rmse_duration))
+```
+
+Model Coefficients 
+```{r}
+summary(model_duration_step)
+```
+
+Model 3: Duration - Model Equation:
+
+duration = 243.23 - 4.68(campaign) + 36.56(poutcome_other) + 113.75(poutcome_success) + 37.17(poutcome_unknown)
+
+Interpretation of Key Coefficients:
+
+- **Intercept** (β = 243.23): For a client with a failed prior outcome and zero campaign contacts, the predicted call duration is approximately 243 seconds (about 4 minutes).
+
+- **campaign** (β = −4.68, p = 0.001): For each additional contact attempt, call duration decreases by approximately 4.7 seconds. As clients are contacted more frequently, subsequent calls become shorter—possibly due to client fatigue.
+
+- **poutcome_success** (β = 113.75, p < 0.001): Clients with a successful prior campaign outcome have calls approximately 114 seconds (nearly 2 minutes) longer than clients with a failed prior outcome. This is the strongest predictor and suggests that previously successful clients are more engaged.
+
+- **poutcome_unknown** (β = 37.17, p = 0.014): Clients never contacted before have calls approximately 37 seconds longer than those with failed prior outcomes, likely requiring more introductory explanation.
+
+Marketing Insight:
+
+Clients with prior successful campaign outcomes engage in substantially longer calls (nearly 2 minutes longer). Since longer call duration is also associated with higher subscription rates, this creates a cycle. The bank should train representatives to invest more time in calls with these high-potential clients. The negative effect of campaign contacts suggests that excessive follow-ups lead to shorter, potentially less productive calls—supporting a quality-over-quantity contact strategy.
+
+**Summary Table for all 3 Models**
+```{r}
+print("TASK 2 SUMMARY")
+print("Test Set RMSE Results:")
+print(paste("Campaign:    ", round(rmse_campaign, 3)))
+print(paste("pdays_recode:", round(rmse_pdays, 3)))
+print(paste("Duration:    ", round(rmse_duration, 3)))
+```
+
+**Decision Tree Model**
+*1. Select Predictors*
+
+We selected duration, poutcome, campaign, housing, month, balance, age, and contact because these variables showed significant effects in our Task 2 regression models—particularly duration and poutcome, which were the strongest predictors of campaign-related outcomes.
+
+*2. Fit the Decision Tree*
+
+```{r}
+tree_model <- rpart(y ~ duration + poutcome + campaign + housing + month + balance + age + contact, data = train, method = "class", control = rpart.control(cp = 0.01))
+
+print(tree_model)
+summary(tree_model)
+```
+
+*3. Generate Predicted Probablities (Test Set)*
+
+Get predicted probablities for class "yes"
+```{r}
+tree_prob <- predict(tree_model, newdata = test, type = "prob")[, "yes"]
+
+head(tree_prob)
+```
+
+*4. Plot the Decision Tree*
+
+basic plot
+```{r}
+plot(tree_model, uniform = TRUE, main = "Decision Tree for Term Deposit Subscription")
+text(tree_model, use.n = TRUE, all = TRUE, cex = 0.7)
+```
+
+nicer visualization
+```{r}
+library(rpart.plot)
+rpart.plot(tree_model,
+           type = 4, #label all nodes
+           extra = 104, #show probability and percent of observations
+           fallen.leaves = TRUE,
+           main = "Decision Tree: Term Deposit Subscription")
 ```
 
